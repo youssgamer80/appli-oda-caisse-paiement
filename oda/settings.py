@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_swagger',
     'api',
 ]
 
@@ -56,7 +57,7 @@ ROOT_URLCONF = 'oda.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR, 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -80,7 +81,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'cagnote_project',
         'USER': 'root',
-        'PASSWORD': '',
+        'PASSWORD': 'mysql@password3.0',
         'HOST': '127.0.0.1',
         'PORT': '3306',
     }
