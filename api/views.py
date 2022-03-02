@@ -1,321 +1,414 @@
-from datetime import datetime
 from django.shortcuts import render
-from django.http import JsonResponse
-from .serializers import *
-from rest_framework.generics import ListAPIView
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.db.models import *
-from api.tests import retour
-from .serializers import *
-from rest_framework.views import APIView
-from datetime import datetime
+from django.core.files.storage import FileSystemStorage
 # Create your views here.
 
-############## 1- Enregistrer les paiements #####################
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Payement , Academicien , Motif
+from .serializers import PayementSerializers , academicienSerialize , MotifSerialize
+from rest_framework.decorators import   api_view , renderer_classes
+from datetime import datetime
+from rest_framework import status
+from . import validators
+import json
+import os
+
+today = datetime.now()
+
+
+@api_view(['GET'])
+def getAllPayement(request):
+    allData = Payement.objects.filter(status=True)
+    serializeData = PayementSerializers(allData,many=True)
+
+    allAcademicien = Academicien.objects.all()
+    allAcademicienSerialeData = academicienSerialize(allAcademicien,many=True)
+
+    returnData = []
+
+    for acad in allAcademicienSerialeData.data  :
+        for paye in serializeData.data :
+            if paye['id_academicien']==acad['id']:
+                returnData.append(acad)
+
+
+    return Response({'status':True,'content':returnData})
+
+@api_view(['GET'])
+def getSignlePayement(request ,id_academicien,id_motif):
+    filterPayment = Payement.objects.filter(id_academicien=id_academicien)
+
+
+
+@api_view(['GET'])
+def soldeCagnotte(request):
+    allData = Payement.objects.all()
+
+    # view data
+    serializeData = PayementSerializers(allData,many=True)
+
+    AllAcademicien = Academicien.objects.all().count()
+    AllMotif = Motif.objects.all().count()
+    AllPayement = Payement.objects.all().count()
+
+    solde = 0
+
+    for money in serializeData.data:
+        solde = solde + money['montant']
+
+    return Response({'status':True,'solde':solde , 'nbre_academicien' : AllAcademicien , 'nbre_motif':AllMotif , 'nbre_payement':AllPayement})
+
+
+@api_view(['GET'])
+def getStatistique(request):
+
+    allData = Payement.objects.all()
+    serializeData = PayementSerializers(allData,many=True)
+
+    mounth = {'01':{'payement':0 , 'retard':0},'02':{'payement':0 , 'retard':0},'03':{'payement':0 , 'retard':0},'04':{'payement':0 , 'retard':0},'05':{'payement':0 , 'retard':0},'06':{'payement':0 , 'retard':0},'07':{'payement':0 , 'retard':0},'08':{'payement':0 , 'retard':0},'09':{'payement':0 , 'retard':0},'10':{'payement':0 , 'retard':0},'11':{'payement':0 , 'retard':0},'12':{'payement':0 , 'retard':0}}
+
+    for paye in serializeData.data:
+        pass
+
+
+
+@api_view(['GET'])
+def getAllMotif(request):
+    allMotif = Motif.objects.filter(status=True)
+    serializeData = MotifSerialize(allMotif,many=True)
+
+
+    return Response({'status':True,'content':serializeData.data})
+
 
 @api_view(['POST'])
-def postPayement(request):
-    idacad = int(request.data['academicien'])
-    motif = int(request.data['motif'])
-    date=request.data['date']
+def createPaymement(request):
+    allAcademicien = Academicien.objects.all()
 
-    if Academicien.objects.filter(pk=idacad) and Motif.objects.filter(pk=motif):
-        id_acad = Academicien.objects.get(pk=idacad)
-        motif = Motif.objects.get(pk=motif)
-        serializer = PayementSerializer(data=request.data)
-        if serializer.is_valid():
-            if not Payement.objects.filter(academicien=id_acad,motif=motif,date=date):
-                serializer.save()
-                return Response({"status":200})
+    allPayement = Payement.objects.all()
+    serializeAllPayement = PayementSerializers(allPayement,many=True)
+
+    allAcademicienSerializeData = academicienSerialize(allAcademicien,many=True)
+
+    allMotif = Motif.objects.all()
+    motifSerialize = MotifSerialize(allMotif,many=True)
+
+    body = json.loads(json.dumps(request.data))
+
+    #valid = validators.validateApi(body,PayementSerializers)
+    #if valid["success"] :
+
+    isFound = False
+
+    for data in allAcademicienSerializeData.data:
+        if data["matricule"] == body["id_academicien"]:
+            isFound = True
+
+    if isFound:
+
+            isMotif = False
+
+            for motif in motifSerialize.data:
+                if motif["id"] == body["id_motif"]:
+                    isMotif = True
+
+            if isMotif:
+
+                y_1 , m_1 , d_1 = [int(x) for x in (str(today.date())).split('-')]
+
+                isRegister = False
+
+                for item in serializeAllPayement.data:
+                    y_2 , m_2 , d_2 = [int(x) for x in (str(item['date'])).split('-')]
+                    if [y_1,m_1,d_1] == [y_2,m_2,d_2] and item["id_motif"] == body["id_motif"]:
+                        isRegister = True
+
+                if isRegister:
+                    return Response({'status':False , 'msg':'Pour ce motif cette personne est déjà enregistré pour la journée.'})
+                else:
+                    currentModif = Motif.objects.get(id=body["id_motif"])
+                    currentAcademicien = Academicien.objects.get(matricule=body["id_academicien"])
+                    paye = Payement(
+                        id_academicien = currentAcademicien,
+                        id_motif = currentModif ,
+                        montant = body["montant"]
+                    )
+                    paye.save()
+
+                    return Response({'status':True , 'msg':'Payement effectué avec succès'})
             else:
-                return Response({"status":400,"data":""})
-        else :
-            return Response({"status":401,"data":serializer.errors})
+                return Response({'status':False , 'msg':'Cet notif est inconnu de nos registres  .'})
     else:
-        return Response({"status":402,"data":""})
+        return Response({'status':False , 'msg':'Desolé cet academicien est inconnu de nos registres .'})
 
+    #else :
+    #    return Response({'status':False , 'content':'Oups! une erreur s\'est produite lors de l\'enregistrement','code':status.HTTP_400_BAD_REQUEST,'errors':valid["errors"]})
 
-class ListPayementAPIView(ListAPIView):
-	"""This endpoint list all of the available todos from the database"""
-	queryset = Payement.objects.all()
-	serializer_class = PayementSerializer
-
-
-############## 2-CRUD des entités ###############################
-####### 1- CRUD Académiciens #########
-
-# a- Create des académiciens
 
 @api_view(['POST'])
-def addAcad(request):
-    try:
-        data = {}
-        if request.method == 'POST':
-            mat = request.data['matricule']
-            if not Academicien.objects.filter(matricule=mat):
-                serializer = AcademicienSerializer(data=request.data)
-                if serializer.is_valid():
-                    serializer.save()
-                    return retour(200,serializer.data)
-                else:
-                    return retour(301,data)
-            else :
-                return retour(300,data)
-        else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
+def createMotif(request):
+        isFound = False
+        body = json.loads(json.dumps(request.data))
+        singleMotif = Motif.objects.all()
+        singleMotif = MotifSerialize(singleMotif,many=True)
 
-@api_view(['GET'])
-def getAcad(request):
-   try:
-        data = {}
-        if request.method == 'GET':
-            acad = Academicien.objects.filter(status=True)
-            serializer = AcademicienSerializer(acad, many=True)
-            return retour(200,serializer.data)
-        else :
-            return retour(400,data)
-   except:
-       return retour(405,data)
+        valid = validators.validateApi(body,MotifSerialize)
 
-@api_view(['PUT'])
-def putAcad(request,ide):
-    try:
-        data = {}
-        if request.method == 'PUT':
-            if Academicien.objects.filter(pk=ide):
-                acad =  Academicien.objects.get(pk=ide)
-                serializer = AcademicienSerializer(acad,data=request.data, partial=True)
-                if serializer.is_valid():
-                    serializer.save()
-                    return retour(200,serializer.data)
-                else:
-                    return retour(301,data)
-            else :
-                return retour(300,data)
-        else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
+        if valid["success"] :
 
-@api_view(['DELETE'])
-def delAcad(request,ide):
-    try:
-        data = {}
-        if request.method == 'DELETE':
-            if Academicien.objects.filter(pk=ide):
-                acad =  Academicien.objects.get(pk=ide)
-                acad.status = False
-                acad.save()
-                return retour(200,data)
-            else :
-                return retour(300,data)
-        else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
-# b- Lire des académiciens
+            for data in singleMotif.data:
+                if data['motif']==body['motif']:
+                        isFound = True
 
-####### 1- CRUD Motif #########
-
-# a- Create des motifs
-
-@api_view(['POST'])
-def addMotif(request):
-    try:
-        data = {}
-        if request.method == 'POST':
-            libelle = request.data['libelle']
-            if not Motif.objects.filter(libelle__iexact=libelle):
-                serializer = MotifSerializer(data=request.data)
-                if serializer.is_valid():
-                    serializer.save()
-                    return retour(200,serializer.data)
-                else :
-                    return retour(401,data)
+            if isFound:
+                return Response({'status':False , 'msg':'Oups! desolé ce motif est déjà enregistré .'})
             else:
-                return retour(300,data)
+                s = Motif(**body)
+                s.date = today.date()
+                s.save()
+                return Response({'status':True , 'msg':'Hey, votre motif à belle et bien été enregistré ....'})
         else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
-
-@api_view(['GET'])
-def getMotif(request):
-    try :
-        data = {}
-        if request.method == 'GET':
-            motif = Motif.objects.filter(status=True)
-            serializer = MotifSerializer(motif, many=True)
-            return retour(200,serializer.data)
-        else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
-
-@api_view(['PUT'])
-def putMotif(request,ide):
-    try:
-        data = {}
-        if request.method == 'PUT':
-            if Motif.objects.filter(pk=ide):
-                motif =  Motif.objects.get(pk=ide)
-                if Motif.objects.filter(libelle__iexact=request.data['libelle']).exclude(pk=ide):
-                    return retour(301,data)
-                serializer = MotifSerializer(motif,data=request.data, partial=True)
-                if serializer.is_valid():
-                    serializer.save()
-                    return retour(200,serializer.data)
-                else:
-                    return retour(301,data)
-            else :
-                return retour(300,data)
-        else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
+            return Response({'status':False , 'content':'Oups! une erreur s\'est produite lors de l\'enregistrement','code':status.HTTP_400_BAD_REQUEST,'errors':valid["errors"]})
 
 @api_view(['DELETE'])
-def delMotif(request,ide):
-    try:
-        data = {}
-        if request.method == 'DELETE':
-            if Motif.objects.filter(pk=ide):
-                motif =  Motif.objects.get(pk=ide)
-                motif.status = False
-                motif.save()
-                return retour(200,data)
+def deletePayement(request , id_paye):
+    allData = Payement.objects.all()
+    serializeData = PayementSerializers(allData,many=True)
+
+    isFound = False
+
+    for data in serializeData.data:
+        if data['id'] == id:
+            isFound = True
+
+    if isFound:
+        paye = Payement.objects.get(id=id_paye)
+        paye.status = False
+        paye.save()
+
+        return Response({'status':True , 'msg':'Suppression effectué avec succès .'})
+
+    else:
+        return Response({'status':False , 'msg':'Element inexistant, suppression impossible.'})
+
+@api_view(['DELETE'])
+def deleteMotif(request,id):
+        isFound = False
+        body = json.loads(json.dumps(request.data))
+        singleMotif = Motif.objects.all()
+        singleMotif = MotifSerialize(singleMotif,many=True)
+
+        for data in singleMotif.data:
+            if data['id']==id:
+                    isFound = True
+        if isFound:
+            s=Motif.objects.get(id=id)
+            s.status = False
+            s.save()
+            return Response({'status':True , 'msg':'Ce motif a été supprimé avec succès....'})
+
+
+        else:
+            return Response({'status':True , 'msg':'Ce motif n\'existe pas....'})
+
+@api_view(['PUT'])
+def updateMotif(request,id_motif):
+        isFound = False
+        body = json.loads(json.dumps(request.data))
+        singleMotif = Motif.objects.all()
+        singleMotif = MotifSerialize(singleMotif,many=True)
+
+        for data in singleMotif.data:
+            if data['id']==id_motif:
+                    isFound = True
+        if isFound:
+
+            valid = validators.validateApi(body,MotifSerialize)
+
+            if valid["success"] :
+
+                isExist = False
+
+                for data in singleMotif.data:
+                    if data['motif']==body['motif'] and data['id']!=id_motif:
+                        isExist = True
+
+                if isExist :
+                    return Response({'status':False , 'msg':'Oups! desolé ce motif est déjà enregistré .'})
+                else:
+                    s=Motif.objects.get(id=id_motif)
+                    s.motif= body['motif']
+                    s.save()
+                    return Response({'status':True , 'msg':'le motif a été modifié avec succès'})
+            else:
+                return Response({'status':False , 'content':'Oups! une erreur s\'est produite lors de l\'enregistrement','code':status.HTTP_400_BAD_REQUEST,'errors':valid["errors"]})
+        else:
+            return Response({'status':True , 'msg':'Ce motif n\'existe pas veuillez l\'ajouter....'})
+
+@api_view(['GET'])
+def AllAcademicien(request):
+        academiciens=Academicien.objects.all()
+        serializers=academicienSerialize(academiciens, many=True)
+        return Response({'status':True , 'content':serializers.data})
+
+@api_view(['GET'])
+def OneAcademicien(request, matricule):
+        allAcademicien=Academicien.objects.all()
+        dataAllacdemicien=academicienSerialize(allAcademicien, many=True)
+
+        isFound=False
+
+        if matricule and matricule!="":
+
+            for data in dataAllacdemicien.data :
+                    if data['matricule']==matricule:
+                            isFound=True
+
+            if isFound:
+
+                onacademicien=Academicien.objects.get(matricule=matricule)
+                getserializer=academicienSerialize(onacademicien, many=False)
+                return Response({'status':True , 'content':getserializer.data})
+
+            else:
+                return Response({'status':False , 'content':'Oups! la reference de cet academicien n\'a pas été trouvé impossible de vous transmettre les informations .'})
+        else:
+             return Response({'status':False , 'content':'Oups! reference non trouvé, cet academicien semble ne pas exister dans nos registres .','code':status.HTTP_400_BAD_REQUEST})
+
+@api_view(['DELETE'])
+def deletAcademicien(request, id_acad):
+
+        allAcademicien=Academicien.objects.all()
+
+        allAcademicien_seriralizer=academicienSerialize(allAcademicien, many=True)
+
+        isFound=False
+
+        for data in allAcademicien_seriralizer.data:
+
+                if data['id']==id_acad:
+                    isFound=True
+                    academicienDeleted = data
+
+        if isFound:
+
+            if os.path.isfile('media/'+academicienDeleted['photo']) :
+
+                os.remove('media/'+academicienDeleted['photo'])
+
+                academicienDeleted = Academicien.objects.get(id=id_acad)
+                academicienDeleted.delete()
+
+                return Response({'status': True , 'content':'Hey, la suppression à été effectué avec succès .'})
+
             else :
-                return retour(300,data)
-        else :
-            return retour(400,data)
-    except:
-        return retour(405,data)
+                return Response({'status': False , 'content':'Oups! une erreur est survenue lors de la suppression merci de réessayer .'})
+
+        else:
+
+            return Response({'status':False , 'content':'Oups! la reference de cet academicien n\'a pas été trouvé impossible de faire la suppression .'})
+
+@api_view(['POST'])
+def AcademicienCreate(request):
+
+    body = request.data
+    allAcademicien = Academicien.objects.all()
+    Acadserializers = academicienSerialize(allAcademicien,many=True)
+
+    isFound = False
+
+    for acad in Acadserializers.data:
+        if body["matricule"] == acad["matricule"]:
+            isFound = True
+
+    if isFound :
+        return Response({'status':False , 'content':'Desolé cet academicien est déjà connu de nos registres.'})
+
+    else:
 
 
-############### 3-Liste de tous les payements
+        upload = request.FILES['photo']
 
-@api_view(['GET'])
-def getPayementByDate(request,date):
-    der =[]
-    dos = {}
-    if not Payement.objects.filter(date=date):
-        return Response({'status':'400',"data": "Motif inexistant"})
-    
-    payements = Payement.objects.filter(date=date)
-    for i in payements:
-        dos = {
-        "date":i.date,
-        "montant":i.montant,
-        "heure":i.heure,
-        "nom":i.academicien.nom,
-        "prenom":i.academicien.prenoms,
-        "photo":i.academicien.photo.url,
-        "matricule":i.academicien.matricule,
-        "motif":i.motif.libelle,
-        }
-        der.append(dos)
-    return JsonResponse({"status": "200", "data": der})
-   
+        fss = FileSystemStorage()
 
-@api_view(['GET'])
-def getPayementByMotif(request,lib):
-    if not Motif.objects.filter(pk=lib):
-        return Response({'status':'400'})
-    moti = Motif.objects.get(pk=lib)
-    payements = Payement.objects.filter(motif=moti.id)
-    serializer = PayementSerializer(payements, many = True)
-    return Response(serializer.data)
-
-@api_view(['GET'])
-def getPayementByMatricule(request,mat):
-
-    if not Academicien.objects.filter(matricule=mat):
-        return Response({'status':'400'})
-        
-    acad = Academicien.objects.get(matricule=mat)
-    payements = Payement.objects.filter(academicien=acad.pk)
-    serializer = PayementSerializer(payements, many = True)
-    return Response({"status": "200", "data": serializer.data})
-
-@api_view(['GET'])
-def getPayement(request,date,mat,lib):
-    if not Payement.objects.filter(date=date) :
-        return Response({'status':'400'})
-    if not Academicien.objects.filter(matricule=mat):
-        return Response({'status':'401'})
-
-    if  not Motif.objects.filter(pk=lib):
-        return Response({'status':'402'})
-
-    acad = Academicien.objects.get(matricule=mat)
-    moti = Motif.objects.get(pk=lib)
-    payements = Payement.objects.filter(date=date,academicien=acad.pk,motif=moti)
-    serializer = PayementSerializer(payements, many = True)
-    return Response({"status": "200", "data": serializer.data})
-
-########## 4-Solde de la caisse à un moment donné
-
-@api_view(['GET'])
-def soldeDate(request,date):
-    if not Payement.objects.filter(date=date):
-        return Response({'status':'400'})
-    soldes = Payement.objects.filter(date=date).aggregate(comme=Sum('montant'))
-    ab = soldes['comme']
-    return Response({"status": "200", "data": {"solde":ab}})
+        file_ext = os.path.splitext(upload.name)[1]
 
 
 
-# Calculs statistiques
-class getNombrePayementByMotif(APIView):
-    '''Class qui retourne le nombre de payement par motif'''
+        if file_ext in ['.png'  , '.jpeg' , '.jpg'] :
 
-    def get(self, request, lib):
-        nombreRetardEtMr = {}
-        if not Motif.objects.filter(pk=lib):
-            return Response({'status': '400'})
-        moti = Motif.objects.get(pk=lib)
-        nombreRetardEtMr[moti.libelle] = Payement.objects.filter(motif=Motif.objects.filter(
-            libelle=moti.libelle).values_list('id', flat=True).first()).count()
-        return Response(nombreRetardEtMr)
+            file_name_to_save = body["matricule"]+file_ext
+
+            data={
+                "nom":body["nom"],
+                "prenoms":body["prenoms"],
+                "matricule":body["matricule"],
+                "photo":file_name_to_save,
+            }
+
+            valid = validators.validateApi(data,academicienSerialize)
+
+            if valid["success"]:
+
+                fss.save(file_name_to_save, upload)
+                Acadserializers = valid["data"]
+                Acadserializers.save()
+
+                return Response({'status':True ,  'content':'Hey, enregistremednt effectué avec succès ...','code':status.HTTP_201_CREATED})
+            else :
+                return Response({'status':False , 'content':'Oups! une erreur s\'est produite lors de l\'enregistrement','code':status.HTTP_400_BAD_REQUEST,'errors':valid["errors"]})
+
+        else:
+            return Response({'status':False , 'content':'Oups! votre photo ne respect pas le format autorisé merci de réessayer . '})
 
 
-class NombreDePaiementMotifParDate(APIView):
-    '''Class qui retourne le nombre de payement pour retart ou pour avoir dit Mr dans une date donnée'''
 
-    def get(self, request,lib, jj, mm, AA):
-        nombreRetardEtMrAuneDateDonne = {}
-        slug = AA+'-'+mm+'-'+jj
-        if not Motif.objects.filter(pk=lib):
-            return Response({'status': '400'})
-        moti = Motif.objects.get(pk=lib)
-        nombreRetardEtMrAuneDateDonne[moti] = Payement.objects.filter(date=slug, motif=Motif.objects.filter(
-            libelle=moti).values_list('id', flat=True).first()).count()
-        return Response(nombreRetardEtMrAuneDateDonne)
 
-# endpoint du classement des payeurs
-class ClassementParPaiementAPIView(APIView):
- # Classement des payement par montant
-    def get(self, request):
-        result = {}
-        queryset = Academicien.objects.all().order_by('-sommeTotalPaieyer')
-        for i in queryset:
-            # result.append(i.nom)
-            result[i.nom + " "+ i.prenoms]= i.sommeTotalPaieyer
+@api_view(['PUT'])
+def AcademicienUpdate(request,id_acad):
 
-        return Response(result)
+    body = json.loads(json.dumps(request.data))
 
-class Estimation(APIView):
-    def get(self, request, jj, mm, AA):
-        date_format = "%Y-%m-%d"
-        slug = AA+'-'+mm+'-'+jj
-        date =datetime.now().date()
-        dateFuture = datetime.strptime(str(slug),date_format)
-        date = datetime.strptime(str(date),date_format)
-        nbjour = dateFuture - date
-        queryset = Payement.objects.aggregate(Avg('montant'))
-        print(date)
-        return Response(queryset)
+    Academserializers = Academicien.objects.all()
+    Academerialize= academicienSerialize(Academserializers,many=True)
+
+    isFound = False
+
+    for acad in Academerialize.data:
+        if acad['id'] == id_acad:
+            isFound = True
+
+
+    if isFound:
+
+        isExist = False
+
+        for acad in Academerialize.data:
+            if acad["matricule"] == body["matricule"]:
+                isExist = True
+
+        if isExist:
+
+            return Response({'status':False , 'content':'Le nouveau matricule renseigné appartient déjà à un autre academicien, impossible de faire la modification .'})
+
+        else:
+
+            valid = validators.validateApi(body,academicienSerialize)
+
+            if valid["success"]:
+                s = Academicien.objects.get(id=id_acad)
+
+                s.nom = body['nom']
+                s.matricule = body['matricule']
+                s.prenoms = body['prenoms']
+
+                s.save()
+
+                return Response({'status':True , 'content':'Hey, modification effectué avec succès ...','code':status.HTTP_201_CREATED})
+            else :
+                return Response({'status':False , 'content':'Oups! une erreur s\'est produite lors de l\'enregistrement','code':status.HTTP_400_BAD_REQUEST,'errors':valid["errors"]})
+
+
+    else:
+        return Response({'status':False , 'content':'Oups! la reference transmise ne correspond à aucun academcien de nos registres .'})

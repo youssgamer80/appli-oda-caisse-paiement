@@ -1,22 +1,32 @@
+from .models import Payement , Academicien , Motif
 from rest_framework import serializers
-from .models import *
-from rest_framework.fields import CurrentUserDefault
 
-class AcademicienSerializer(serializers.ModelSerializer):
+class PayementSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = Payement
 
-	class Meta:
-		model = Academicien
-		fields = ['matricule', 'id', 'nom', 'prenoms','photo']
+        fields = '__all__'
 
-class PayementSerializer(serializers.ModelSerializer):
-	
+        id_academicien = serializers.CharField(required=True)
+        id_motif = serializers.CharField(required=True)
+        montant = serializers.CharField(required=True)
+        
 
-	class Meta:
-		model = Payement
-		fields = ('__all__')
+class academicienSerialize(serializers.ModelSerializer):
 
-class MotifSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Academicien
 
-	class Meta:
-		model = Motif
-		fields = ['libelle', 'id']
+        fields = ['nom' , 'matricule' , 'prenoms' , 'id' , 'date' , 'photo']
+
+    nom = serializers.CharField(required=True)
+    prenoms = serializers.CharField(required=True)
+    matricule = serializers.CharField(required=True)
+
+class MotifSerialize(serializers.ModelSerializer):
+    class Meta:
+        model = Motif
+
+        fields = '__all__'
+    
+    motif = serializers.CharField(required=True)

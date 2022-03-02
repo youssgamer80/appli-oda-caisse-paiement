@@ -1,52 +1,34 @@
-from django.urls import path,register_converter
-from datetime import datetime
+from django.urls import path 
 from . import views
-
-class DateConverter:
-    regex = '\d{4}-\d{2}-\d{2}'
-
-    def to_python(self, value):
-        return datetime.strptime(value, '%Y-%m-%d')
-
-    def to_url(self, value):
-        return value
-
-register_converter(DateConverter, 'yyyy-mm-dd')
-
+from django.conf.urls.static import static
+from django.conf import settings
 
 urlpatterns = [
 
-    ######## 1ère fonctionnalité
-    path('paiements/add/', views.postPayement,),
-    path('paiements/', views.ListPayementAPIView.as_view(),),
+    # payement urls
 
-    ########2ème
-    path('academicien/add/',views.addAcad),
-    path('academicien/',views.getAcad),
-    path('academicien/update/<int:ide>',views.putAcad),
-    path('academicien/del/<int:ide>',views.delAcad),
-    
-    #######################CRUD Motif #################
-    path('motif/add/',views.addMotif),
-    path('motif/',views.getMotif),
-    path('motif/update/<int:ide>',views.putMotif),
-    path('motif/del/<int:ide>',views.delMotif),
+    path('all-payement/',views.getAllPayement),
+    path('create-payement/',views.createPaymement),
 
-    ######### 3ème fonctionnalités
-    path('paiement/<yyyy-mm-dd:date>',views.getPayementByDate),
-    path('paiement/mat/<str:mat>',views.getPayementByMatricule),
-    path('paiement/motif/<int:lib>',views.getPayementByMotif),
-    path('paiement/<yyyy-mm-dd:date>/<str:mat>/<str:lib>', views.getPayement),
+    # counter data urls
+    path('counte-data-items/',views.soldeCagnotte),
 
-    ####### 4ème fonctionnalité
-    path('solde/<yyyy-mm-dd:date>',views.soldeDate),
+    # motif urls 
 
-    # statistiques
-     # endpoint Calculs
-    path('paiement/stat/motif/<int:lib>',views.getNombrePayementByMotif().as_view()),
-    path('paiement/stat/motif/<int:lib>?<jj>/<mm>/<AA>',views.NombreDePaiementMotifParDate.as_view(), ),
-    path('paiement/stat/classement', views.ClassementParPaiementAPIView.as_view()),
-    path('paiement/stat/estimation/<jj>/<mm>/<AA>', views.Estimation.as_view()),
+    path('list-of-motif/',views.getAllMotif),
+    path('create-new-motif/',views.createMotif),
+    path('deleted-motif/<int:id>',views.deleteMotif),
+    path('update-motif/<int:id_motif>',views.updateMotif),
 
+    # academicien urls 
+
+    path('create-academicien/',views.AcademicienCreate),
+    path('view-all-academicien/',views.AllAcademicien),
+    path('get-single-academicien/<str:matricule>',views.OneAcademicien),
+    path('academicien-update-data/<int:id_acad>',views.AcademicienUpdate),
+    path('delete-academicien/<int:id_acad>',views.deletAcademicien)
 
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)
